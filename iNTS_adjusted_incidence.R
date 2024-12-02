@@ -14,43 +14,41 @@ set.seed(012)
 #########################
 #### DATA LOADING #######
 #########################
-# Replace this section with your real data loading
-# Example structure of required data:
-# blood_culture_data should be a data frame with columns:
-# - date: dates of tests
-# - bc_positive: binary (0/1) for typhoid positive results
-# - bc_tested: binary (0/1) for whether blood culture was taken
-
-# Example of loading real data (modify as needed):
+# Load data
 blood_culture_data <- read_csv("~/Dropbox/GordonGroup/iNTS_Typhimurium_updates/data_munging/2024.12.02/2024.12.02.strataa_data_for_model.csv", col_types = cols(date = col_date(format = "%Y-%m-%dT%H:%M:%SZ")))
 
 blood_culture_data <- blood_culture_data %>%
   filter(date > ymd("2016-10-01")) %>%
   filter(date < ymd('2020-01-01'))
 
-# Create time periods (e.g., quarters)
+# Create time periods (quarters)
 blood_culture_data$quarter <- cut(blood_culture_data$date, 
                                   breaks = "quarter",
                                   labels = FALSE)
 
-# Calculate blood culture testing counts by quarter
-bc_by_quarter <- aggregate(bc_tested ~ quarter, 
-                           data = blood_culture_data, 
-                           FUN = function(x) c(sum(x), length(x) - sum(x)))
+# Calculate blood culture counts by quarter
+bc_by_quarter <- blood_culture_data %>%
+  group_by(quarter) %>%
+  summarize(
+    n_tested = sum(bc_tested),
+    n_total = n(),
+    bc_prob = n_tested / n_total
+  )
 
 # Prepare model inputs
 n_quarters <- length(unique(blood_culture_data$quarter))
 n_BCpos <- aggregate(bc_positive ~ quarter, 
                      data = blood_culture_data, 
                      FUN = sum)$bc_positive
+n_tested <- bc_by_quarter$n_tested
+n_total <- bc_by_quarter$n_total
 
-# Person-time at risk (modify based on your population data)
-persontime <- rep(250000, n_quarters) # Example: 100,000 person-years per quarter
+# Person-time at risk
+persontime <- rep(25000, n_quarters)
 
-# Parameters for blood culture sensitivity (based on literature)
-mu_sensitivity <- 0.59  # mean sensitivity
-tau_sensitivity <- 1/0.0006507705  # precision
-
+# Parameters for blood culture sensitivity
+mu_sensitivity <- 0.59
+tau_sensitivity <- 1/0.0006507705
 
 #########################
 ######### MODEL #########
@@ -58,39 +56,33 @@ tau_sensitivity <- 1/0.0006507705  # precision
 jcode <-"
 model{
   # Blood culture sensitivity prior
-  p_BCpos ~ dnorm(mu_sensitivity, tau_sensitivity)
+  p_BCpos ~ dnorm(mu_sensitivity, tau_sensitivity)T(0,1)
 
-  # First time period
-  logit_p_BC[1] ~ dnorm(0, 0.001)  # vague prior for first period
-  p_BC[1] <- 1/(1 + exp(-logit_p_BC[1]))
+  # Hyperpriors for beta distribution parameters
+  alpha ~ dgamma(1, 0.1)
+  beta ~ dgamma(1, 0.1)
 
-  # Time-varying blood culture probability for subsequent periods
-  for (t in 2:n_quarters) {
-    # Random walk for logit blood culture probability
-    logit_p_BC[t] ~ dnorm(logit_p_BC[t-1], tau_bc)
-    p_BC[t] <- 1/(1 + exp(-logit_p_BC[t]))
-  }
-  
   # Model for all time periods
   for (t in 1:n_quarters) {    
+    # Blood culture probability from beta distribution
+    p_BC[t] ~ dbeta(alpha, beta)
+    
+    # Likelihood for observed blood culture data
+    n_tested[t] ~ dbin(p_BC[t], n_total[t])
+    
     # Model for observed positive cases
     n_BCpos[t] ~ dpois(lambda_obs[t])
     lambda_obs[t] <- lambda_true[t] * p_BCpos * p_BC[t]
     
     # True incidence model
     log(lambda_true[t]) <- beta0[t] + log(persontime[t])
-    beta0[t] ~ dnorm(0, 1/100000000)  # weakly informative prior
+    beta0[t] ~ dnorm(-8, 1)  # centered around lower incidence values
     
     # Derived quantities
     true_inc[t] <- exp(beta0[t]) * 100000  # per 100,000 PY
-    
-    # Modified adjustment factor calculation to avoid division by zero
-    obs_inc[t] <- (n_BCpos[t] + 0.5)/(persontime[t]) * 100000  # add small constant to avoid division by zero
+    obs_inc[t] <- (n_BCpos[t] + 0.5)/(persontime[t]) * 100000
     adj_factor[t] <- true_inc[t]/obs_inc[t]
   }
-  
-  # Prior for precision of random walk
-  tau_bc ~ dgamma(0.001, 0.001)
 }
 "
 
@@ -98,9 +90,20 @@ model{
 ####### RUN MODEL #######
 #########################
 
+inits <- function() {
+  list(
+    p_BCpos = 0.59,
+    beta0 = rep(-8, n_quarters),
+    alpha = 1,
+    beta = 1
+  )
+}
+
 # Prepare data for JAGS
 jdat <- list(
   n_BCpos = n_BCpos,
+  n_tested = n_tested,
+  n_total = n_total,
   persontime = persontime,
   n_quarters = n_quarters,
   mu_sensitivity = mu_sensitivity,
@@ -108,19 +111,24 @@ jdat <- list(
 )
 
 # Initialize model
-jmod <- jags.model(textConnection(jcode), data=jdat, n.chains=3)
+jmod <- jags.model(textConnection(jcode), 
+                   data = jdat, 
+                   inits = inits,
+                   n.chains = 3)
 
 # Burn-in
-update(jmod, 10000)
+update(jmod, 50000)
 
 # Sample from posterior
 jpost <- coda.samples(jmod, 
-                      thin=3,
+                      thin = 10,
                       c('true_inc',
                         'p_BC',
                         'p_BCpos',
-                        'adj_factor'),
-                      n.iter=100000)
+                        'adj_factor',
+                        'alpha',
+                        'beta'),
+                      n.iter = 200000)
 
 #########################
 ###### DIAGNOSTICS ######
@@ -129,6 +137,10 @@ jpost <- coda.samples(jmod,
 # Check convergence
 gelman_stats <- gelman.diag(jpost, multivariate = FALSE)
 print(gelman_stats)
+
+#plot(jpost)  # trace plots
+#effectiveSize(jpost)  # effective sample size
+#summary(jpost)
 
 #########################
 ###### RESULTS ##########
