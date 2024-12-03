@@ -88,7 +88,7 @@ beta.bc <- n_total - n_tested
 
 # Person-time at risk
 #persontime <- rep(100000, n_years)
-persontime <- c(100000,100000,100000,58333,100000,100000)
+persontime <- c(100000,100000,100000,58333,100000,91666)
 
 # Parameters for blood culture sensitivity
 mu_sensitivity <- 0.59
@@ -126,7 +126,7 @@ model{
 "
 
 #########################
-####### RUN MODEL - quarters #######
+####### RUN MODEL - years #######
 #########################
 
 inits <- function() {
@@ -158,7 +158,7 @@ jmod <- jags.model(textConnection(jcode),
 update(jmod, 50000)
 
 # Sample from posterior
-jpost <- coda.samples(jmod, 
+jpost <- coda.samples(jmod,
                       thin = 10,
                       c('true_inc',
                         'p_BC',
