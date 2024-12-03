@@ -19,7 +19,7 @@ strataa_blood_culture_data <- read_csv("~/Dropbox/GordonGroup/iNTS_Typhimurium_u
 
 strataa_blood_culture_data <- strataa_blood_culture_data %>%
   filter(date > ymd("2016-12-31")) %>%
-  filter(date < ymd('2020-01-01'))
+  filter(date < ymd('2019-11-01'))
 
 mitima_data <- read.csv("/Users/flashton/Dropbox/GordonGroup/iNTS_Typhimurium_updates/data_munging/2024.12.02/2024.12.02.mitima_data_for_model.csv", colClasses = c(DSP = "character")) %>%
   mutate(date = as.Date(DSP, format = "%d-%b-%Y")) %>% 
@@ -88,7 +88,16 @@ beta.bc <- n_total - n_tested
 
 # Person-time at risk
 #persontime <- rep(100000, n_years)
-persontime <- c(100000,100000,100000,58333,100000,91666)
+
+# population estimate from script is 99476, 100197, 100918, 103081, 103802, 104523
+# then, adjust for study start/end for 2019, 2022, 2024
+# 2019 - until 31st October (confirm with Meiring) (0.83)
+# 2022 - from May 23rd on (0.61)
+# 2024 - until Nov 21st (0.89)
+#persontime <- c(100000,100000,100000,58333,100000,91666)
+# 2017, 18, 19, 22, 23, 24
+persontime <- c(99476, 100197, (100918 * 0.83), (103081 * 0.61), 103802, (104523* 0.89))
+
 
 # Parameters for blood culture sensitivity
 mu_sensitivity <- 0.59
@@ -179,8 +188,10 @@ sum_post <- summary(jpost)
 
 # Print results
 results_inc <- round(sum_post$quantiles[grep("true_inc", rownames(sum_post$quantiles)),c(3,1,5)],0)
-results_bc_prob <- round(sum_post$quantiles[grep("p_BC", rownames(sum_post$quantiles)),c(3,1,5)],3)
+results_inc <- as.data.frame(results_inc)
+row.names(results_inc) <- c(2017, 2018, 2019, 2022, 2023, 2024)
+#results_bc_prob <- round(sum_post$quantiles[grep("p_BC", rownames(sum_post$quantiles)),c(3,1,5)],3)
 
 # Save results
-write.csv(results_inc, "estimated_incidence_by_quarter.csv")
-write.csv(results_bc_prob, "estimated_bc_probability_by_quarter.csv")
+write.csv(results_inc, "/Users/flashton/Dropbox/GordonGroup/iNTS_Typhimurium_updates/data_munging/2024.12.02/2024.12.03.ndirande_adjusted_incidence.csv", row.names = TRUE)
+#write.csv(results_bc_prob, "estimated_bc_probability_by_quarter.csv")
