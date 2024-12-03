@@ -102,24 +102,25 @@ model{
   # Blood culture sensitivity prior
   p_BCpos ~ dnorm(mu_sensitivity, tau_sensitivity)T(0,1)
 
-
   # Model for all time periods
   for (t in 1:n_timeperiods) {    
-    # Blood culture probability from beta distribution
+    # Blood culture probability from observed counts
     p_BC[t] ~ dbeta(alpha.bc[t], beta.bc[t])
-    
     
     # Model for observed positive cases
     n_BCpos[t] ~ dpois(lambda_obs[t])
     lambda_obs[t] <- lambda_true[t] * p_BCpos * p_BC[t]
     
-    # True incidence model
+    # True cases as latent Poisson process
+    true_cases[t] ~ dpois(lambda_true[t])
+    
+    # Very weakly informative prior for log incidence
     log(lambda_true[t]) <- beta0[t] + log(persontime[t])
-    beta0[t] ~ dnorm(-8, 1)  # centered around lower incidence values
+    beta0[t] ~ dnorm(0, 1/100000000)
     
     # Derived quantities
     true_inc[t] <- exp(beta0[t]) * 100000  # per 100,000 PY
-    obs_inc[t] <- (n_BCpos[t] + 0.5)/(persontime[t]) * 100000
+    obs_inc[t] <- (n_BCpos[t]/persontime[t]) * 100000
     adj_factor[t] <- true_inc[t]/obs_inc[t]
   }
 }
@@ -128,14 +129,6 @@ model{
 #########################
 ####### RUN MODEL - years #######
 #########################
-
-inits <- function() {
-  list(
-    beta0 = rep(-8, n_years)
-  )
-}
-
-
 
 # Prepare data for JAGS
 jdat <- list(
@@ -150,8 +143,7 @@ jdat <- list(
 
 # Initialize model
 jmod <- jags.model(textConnection(jcode), 
-                   data = jdat, 
-                   inits = inits,
+                   data = jdat,
                    n.chains = 3)
 
 # Burn-in

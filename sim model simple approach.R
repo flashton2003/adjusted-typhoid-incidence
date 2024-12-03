@@ -14,7 +14,7 @@ set.seed(012)
 ####INPUT PARAMETERS#####
 #########################
 #load data 
-setwd("~/adjusted typhoid incidence")
+setwd("/Users/flashton/Dropbox/GordonGroup/iNTS_Typhimurium_updates/adjusted-typhoid-incidence")
 ds <- readMat('strataa_simulated_data.mat')
 
 names(ds)
@@ -112,10 +112,11 @@ jmod <- jags.model(textConnection(jcode), data=jdat, n.chains=3)
 update(jmod,10000)
 
 #fit full model, and decide which parameters to track
+
 jpost <- coda.samples(jmod, thin=3, c(
- 'true.inc',
+  'true.inc',
   'p_BC','p_BCpos','p_HC', 'adj.fact'
-), n.iter=100000) 
+), n.iter=100000)
 
 
 #########################
