@@ -21,7 +21,7 @@ strataa_blood_culture_data <- strataa_blood_culture_data %>%
   filter(date > ymd("2016-12-31")) %>%
   filter(date < ymd('2019-11-01'))
 
-mitima_data <- read.csv("/Users/flashton/Dropbox/GordonGroup/iNTS_Typhimurium_updates/data_munging/2024.12.02/2024.12.02.mitima_data_for_model.csv", colClasses = c(DSP = "character")) %>%
+mitima_data <- read.csv("/Users/flashton/Dropbox/GordonGroup/iNTS_Typhimurium_updates/data_munging/2024.12.02/2024.12.02.mitima_data_for_model.plus_zing.csv", colClasses = c(DSP = "character")) %>%
   mutate(date = as.Date(DSP, format = "%d-%b-%Y")) %>% 
   select (date, bc_positive) %>% 
   mutate(bc_tested = 1) # all these have had bc_tested
@@ -97,6 +97,7 @@ beta.bc <- n_total - n_tested
 #persontime <- c(100000,100000,100000,58333,100000,91666)
 # 2017, 18, 19, 22, 23, 24
 persontime <- c(99476, 100197, (100918 * 0.83), (103081 * 0.61), 103802, (104523* 0.89))
+persontime <- c(99476, 100197, (100918 * 0.83), (153081 * 0.61), 153802, (154523* 0.89))
 
 
 # Parameters for blood culture sensitivity
@@ -193,5 +194,5 @@ row.names(results_inc) <- c(2017, 2018, 2019, 2022, 2023, 2024)
 #results_bc_prob <- round(sum_post$quantiles[grep("p_BC", rownames(sum_post$quantiles)),c(3,1,5)],3)
 
 # Save results
-write.csv(results_inc, "/Users/flashton/Dropbox/GordonGroup/iNTS_Typhimurium_updates/data_munging/2024.12.02/2024.12.03.ndirande_adjusted_incidence.csv", row.names = TRUE)
+write.csv(results_inc, "/Users/flashton/Dropbox/GordonGroup/iNTS_Typhimurium_updates/data_munging/2024.12.02/2024.12.03.ndirande_adjusted_incidence.with_zing.csv", row.names = TRUE)
 #write.csv(results_bc_prob, "estimated_bc_probability_by_quarter.csv")
