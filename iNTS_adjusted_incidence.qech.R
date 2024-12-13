@@ -35,7 +35,7 @@ n_tested <- yearly_summary$n_tested
 
 # You'll need to add the population under surveillance for each year
 # This is just a placeholder - replace with actual population data
-population_by_year <- c(786363, 800264, 814164, 828065, 841966, 855867, 869768, 883668)
+population_by_year <- c(786363, 800264, 814164, 828065, 841966, 855867, 869768, 883668 * 0.89)
 
 # Parameters for blood culture sensitivity
 mu_sensitivity <- 0.59
