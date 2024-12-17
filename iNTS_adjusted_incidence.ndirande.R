@@ -26,38 +26,73 @@ mitima_data <- read.csv("/Users/flashton/Dropbox/GordonGroup/iNTS_Typhimurium_up
   select (date, bc_positive) %>% 
   mutate(bc_tested = 1) # all these have had bc_tested
 
-add_random_dates <- function(df) {
-  # Get start and end dates from original data
-  start_date <- min(df$date)
-  end_date <- max(df$date)
+# Function to add rows for missing blood cultures
+add_missing_data <- function(df, monthly_data) {
+  # Convert date to month-year format for matching
+  df <- df %>%
+    mutate(month_year = floor_date(date, "month"))
   
-  # Calculate number of rows to add (25% of original)
-  n_new_rows <- ceiling(nrow(df) * 0.25)
+  # Iterate through each month in the monthly data
+  for (i in 1:nrow(monthly_data)) {
+    month_str <- monthly_data$date[i]
+    eligible <- monthly_data$eligible[i]
+    
+    # Parse month-year from `monthly_data`
+    start_date <- as.Date(paste0("01-", month_str), format = "%d-%b-%y")
+    end_date <- start_date + days(days_in_month(start_date) - 1)
+    month_year <- floor_date(start_date, "month")
+    
+    # Calculate the number of enrolled for the month
+    enrolled <- df %>%
+      filter(month_year == floor_date(start_date, "month")) %>%
+      nrow()
+    #print(enrolled)
+    #print(eligible)
+    
+    # Calculate the difference
+    difference <- eligible - enrolled
+    
+    # Generate random dates within the month
+    start_date <- as.Date(paste0("01-", month_str), format = "%d-%b-%y")
+    end_date <- start_date + days(days_in_month(start_date) - 1)
+    random_dates <- sample(seq(start_date, end_date, by = "day"), size = difference, replace = TRUE)
+    
+    # Create new rows
+    new_rows <- data.frame(
+      date = random_dates,
+      bc_tested = 0,
+      bc_positive = 0
+    )
+    
+    # Append new rows to the main dataframe
+    new_rows <- new_rows %>% mutate(month_year = floor_date(date, "month"))
+    df <- rbind(df, new_rows)
+    # Calculate the number of enrolled for the month
+    #View(df)
+    #eligible <- df %>%
+    #  filter(month_year == floor_date(start_date, "month")) %>%
+    #  nrow()
+    #print(eligible)
+  }
   
-  # Generate random dates between start and end
-  random_dates <- sample(
-    seq(start_date, end_date, by = "day"),
-    size = n_new_rows,
-    replace = TRUE
-  )
-  
-  # Create new dataframe with random dates
-  new_rows <- data.frame(
-    date = random_dates,
-    bc_tested = 0,
-    bc_positive = 0
-  )
-  
-  # Combine with original dataframe and sort by date
-  combined_df <- rbind(df, new_rows) %>%
-    arrange(date)
-  
-  return(combined_df)
+  # Sort by date
+  df <- df %>% arrange(date)
+  return(df)
 }
 
-# need to add participants who didn't receive blood culture, overall, was around 20% of samples, so adding 25% (25% of 80% brings us up oto 100% of original)
-mitima_data <- add_random_dates(mitima_data)
+# Load monthly data (replace 'path_to_monthly_data.csv' with your file path)
+monthly_data <- read.csv("/Users/flashton/Dropbox/GordonGroup/TyVAC/data_munging/2024.12.06/MITIMA_eligible_enrolled_num.csv") %>%
+  mutate(date = as.character(date)) # Ensure date is character for processing
+
+# need to add the eligibles but not enrolled
+# calc the differene between teh enrolled (those in mitima data) and the eligibles ()
+mitima_data <- add_missing_data(mitima_data, monthly_data)
+
+
+
 mitima_data <- mitima_data %>% select(date, bc_tested, bc_positive)
+
+mitima_data %>% mutate(month_year = floor_date(date, "month")) %>% group_by(month_year) %>% summarise(n_eligible = n(), n_tested = sum(bc_tested), n_positive = sum(bc_positive))
 
 combined_data <- rbind(strataa_blood_culture_data, mitima_data)
 
@@ -96,8 +131,11 @@ beta.bc <- n_total - n_tested
 # 2024 - until Nov 21st (0.89)
 #persontime <- c(100000,100000,100000,58333,100000,91666)
 # 2017, 18, 19, 22, 23, 24
-persontime <- c(99476, 100197, (100918 * 0.83), (103081 * 0.61), 103802, (104523* 0.89))
-persontime <- c(99476, 100197, (100918 * 0.83), (153081 * 0.61), 153802, (154523* 0.89))
+# multiply by 0.95 because 5% of the population are more
+# this one is ndiradane only
+#persontime <- c(99476 * 0.915, 100197 * 0.915, (100918 * 0.83) * 0.915, (103081 * 0.61) * 0.915, 103802 * 0.915, (104523* 0.89) * 0.915)
+# this one is ndirande plus zingwangwa for the mitima years
+persontime <- c(99476 * 0.915, 100197 * 0.915, (100918 * 0.83) * 0.915, (153081 * 0.61) * 0.915, 153802 * 0.915, (154523* 0.89) * 0.915)
 
 
 # Parameters for blood culture sensitivity
